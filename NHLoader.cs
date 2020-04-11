@@ -4,7 +4,7 @@ using TaleWorlds.Core;
 using TaleWorlds.MountAndBlade;
 using TaleWorlds.CampaignSystem;
 
-namespace NoHarmony
+namespace NoHarmony // ver 0.8.2
 {
     public class NoHarmonyLoader : MBSubModuleBase
     {
@@ -114,7 +114,7 @@ namespace NoHarmony
         /// <param name="replacedObject">Model or Behavior type you want replaced (not required)</param>
         /// <param name="mode">Mode used for replace</param>
         /// <param name="insert">When should the object be added. Auto let's NoHarmony decide.</param>
-        protected void AddItem(Type addedObject, Type replacedObject = null, ModeReplace mode = ModeReplace.Replace, AddToPhase insert = AddToPhase.Auto)
+        protected void AddItem(Type addedObject, Type replacedObject = null, ModeReplace mode = ModeReplace.ReplaceOrAdd, AddToPhase insert = AddToPhase.Auto)
         {
             if (typeof(CampaignBehaviorBase).IsAssignableFrom(addedObject))
             {
@@ -143,19 +143,15 @@ namespace NoHarmony
 
         protected void NHHandler(CampaignGameStarter gameInitializer, AddToPhase call)
         {
-            bool bInit = false, mInit = false;
-            if (gameInitializer.CampaignBehaviors is IList<CampaignBehaviorBase> CampaignBehaviors)
-            {
-                bInit = true;
-            }
-            if (gameInitializer.Models is IList<GameModel> models)
-            {
-                mInit = true;
-            }
-
+            IList<CampaignBehaviorBase> cBehaviors = gameInitializer.CampaignBehaviors as IList<CampaignBehaviorBase>;
+            IList<GameModel> models = gameInitializer.Models as IList<GameModel>;
 
             foreach ( NHLTask temp in NHLTodo)
             {
+                if(temp.replace == typeof(GameModel)||temp.replace == typeof(CampaignBehaviorBase))
+                {
+                    continue;
+                }
                 if(temp.phase != call)
                 {
                     continue;
@@ -163,61 +159,75 @@ namespace NoHarmony
 
                 if (typeof(CampaignBehaviorBase).IsAssignableFrom(temp.add))
                 {
-                    bool found = false;
-                    for (int index = 0; index < CampaignBehaviors.Count; ++index)
+                    if(cBehaviors == null)
                     {
-                        if (CampaignBehaviors[index] is TBaseType)
+                        continue;
+                    }
+                    bool found = false;
+                    for (int index = 0; index < cBehaviors.Count; ++index)
+                    {
+                        if (temp.replace != null && cBehaviors[index].GetType().IsAssignableFrom(temp.replace))
                         {
                             found = true;
-                            if (CampaignBehaviors[index] is TChildType)
+                            if (cBehaviors[index].GetType() == temp.add)
                             {
-                                Log.Info($"Child behavior {typeof(TChildType).Name} found, skipping.");
+                                Log.Info($"Behavior {temp.add.Name} already present.");
                             }
                             else
                             {
-                                Log.Info($"Base behavior {typeof(TBaseType).Name} found. Replacing with child model {typeof(TChildType).Name}");
-                                CampaignBehaviors[index] = Activator.CreateInstance<TChildType>();
+                                if(Logging)
+                                    Log.Info($"{temp.replace.Name} found. Replacing with {temp.add.Name}");
+                                cBehaviors[index] =  (CampaignBehaviorBase)Activator.CreateInstance(temp.add);
                             }
                         }
+                    }
+                    if (!found)
+                    {
+                        if(temp.replace!=null && temp.mode == ModeReplace.Replace)
+                        {
+                            Log.Info($"Behavior {temp.replace.Name} not found.");
+                            continue;
+                        }
+                        gameInitializer.AddBehavior((CampaignBehaviorBase)Activator.CreateInstance(temp.add));
+                    }
+                }
+                if (typeof(GameModel).IsAssignableFrom(temp.add))
+                {
+                    if (models == null)
+                    {
+                        continue;
+                    }
+                    bool found = false;
+                    for (int index = 0; index < models.Count; ++index)
+                    {
+                        if (temp.replace != null && models[index].GetType().IsAssignableFrom(temp.replace))
+                        {
+                            found = true;
+                            if (models[index].GetType() == temp.add)
+                            {
+                                Log.Info($"Model {temp.add.Name} already present.");
+                            }
+                            else
+                            {
+                                if (Logging)
+                                    Log.Info($"{temp.replace.Name} found. Replacing with {temp.add.Name}");
+                                models[index] = (GameModel)Activator.CreateInstance(temp.add);
+                            }
+                        }
+                    }
+                    if (!found)
+                    {
+                        if (temp.replace != null && temp.mode == ModeReplace.Replace)
+                        {
+                            Log.Info($"Model {temp.replace.Name} not found.");
+                            continue;
+                        }
+                        gameInitializer.AddModel((GameModel)Activator.CreateInstance(temp.add));
                     }
                 }
 
             }
         }
-
-        /*protected void NHLAdd<TBaseType, TChildType>(IGameStarter gameStarterObject)
-            where TBaseType : GameModel
-            where TChildType : TBaseType
-        {
-            if (!(gameStarterObject.Models is IList<GameModel> models))
-            {
-                return;
-            }
-
-            bool found = false;
-            for (int index = 0; index < models.Count; ++index)
-            {
-                if (models[index] is TBaseType)
-                {
-                    found = true;
-                    if (models[index] is TChildType)
-                    {
-                        Log.Info($"Child model {typeof(TChildType).Name} found, skipping.");
-                    }
-                    else
-                    {
-                        Log.Info($"Base model {typeof(TBaseType).Name} found. Replacing with child model {typeof(TChildType).Name}");
-                        models[index] = Activator.CreateInstance<TChildType>();
-                    }
-                }
-            }
-
-            if (!found)
-            {
-                Log.Info($"Base model {typeof(TBaseType).Name} was not found. Adding child model {typeof(TChildType).Name}");
-                gameStarterObject.AddModel(Activator.CreateInstance<TChildType>());
-            }
-        }*/
 
         //logging stuff
         protected override void OnSubModuleLoad()
