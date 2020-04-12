@@ -1,21 +1,29 @@
 using System;
+using System.IO;
 using System.Collections.Generic;
 using TaleWorlds.Core;
 using TaleWorlds.MountAndBlade;
 using TaleWorlds.CampaignSystem;
 
-namespace NoHarmony // v0.9.1
+namespace NoHarmony // v0.9.2
 {
     public class NoHarmonyLoader : MBSubModuleBase
     {
-        protected static readonly NLog.Logger Log = NLog.LogManager.GetCurrentClassLogger();
         public bool Logging = true; //        Enable basic logging
         public bool NHLStopOnError = true; // Stop on error = true, try to continue = false
         public PhaseLog PhaseToLog = PhaseLog.All;
         public TypeLog ObjectsToLog = TypeLog.None;
+        public LogLvl MinLogLvl = LogLvl.Info;
+        public string LogFile = "NoHarmony.txt";
 
 
-        public virtual void NoHarmonyInit() { }
+        /// <summary>
+        /// Put here all the code ou want executed before the game mains's menu
+        /// </summary>
+        public virtual void NoHarmonyInit()
+        {
+
+        }
 
         /// <summary>
         /// Put here all behaviors and models you want NoHarmony to handle using method "AddItem".
@@ -28,6 +36,15 @@ namespace NoHarmony // v0.9.1
         }
 
 
+        //logging stuff
+        protected override void OnSubModuleLoad()
+        {
+
+            NHLTodo = new List<NHLTask>();
+            NHLLogging(PhaseLog.OnSubModuleLoad, null);
+        }
+
+        
         /// <summary>
         /// Called first in order, always executed. Models are loaded here usually.
         /// </summary>
@@ -99,6 +116,7 @@ namespace NoHarmony // v0.9.1
         public enum AddToPhase { Auto, OnGameStart, OnCampaignStart, OnGameLoaded, OnNewGameCreated }
         public enum TypeLog { None = 0, Models = 1, Behaviors = 2, All = 3 }
         private List<NHLTask> NHLTodo;
+        public enum LogLvl { Tracking = 0, Info = 1, Warning = 2, Error = 3 }
 
         private struct NHLTask
         {
@@ -112,9 +130,8 @@ namespace NoHarmony // v0.9.1
                 mode = m;
                 phase = p;
             }
-
         }
-
+        
         /// <summary>
         /// Method to use in NoHarmonyInit() to add models or campaignbehavior to the game.
         /// </summary>
@@ -142,9 +159,9 @@ namespace NoHarmony // v0.9.1
                     return;
                 }
             }
-            else if (Logging)
+            else
             {
-                Log.Error("Init - " + addedObject + " is not a valide model or behavior!");
+                Log(LogLvl.Error, "Loading error - " + addedObject + " is not a valide model or behavior!");
                 return;
             }
             NHLTodo.Add(new NHLTask(addedObject, replacedObject, mode, insert));
@@ -180,12 +197,11 @@ namespace NoHarmony // v0.9.1
                             found = true;
                             if (cBehaviors[index].GetType() == temp.add)
                             {
-                                Log.Info($"Behavior {temp.add.Name} already present.");
+                                Log(LogLvl.Warning, $"Behavior {temp.add.Name} already present.");
                             }
                             else
                             {
-                                if (Logging)
-                                    Log.Info($"{temp.replace.Name} found. Replacing with {temp.add.Name}");
+                                Log(LogLvl.Info, $"{temp.replace.Name} found. Replacing with {temp.add.Name}");
                                 cBehaviors[index] = (CampaignBehaviorBase)Activator.CreateInstance(temp.add);
                             }
                         }
@@ -194,7 +210,7 @@ namespace NoHarmony // v0.9.1
                     {
                         if (temp.replace != null && temp.mode == ModeReplace.Replace)
                         {
-                            Log.Info($"Behavior {temp.replace.Name} not found.");
+                            Log(LogLvl.Warning, $"Behavior {temp.replace.Name} not found.");
                             continue;
                         }
                         gameInitializer.AddBehavior((CampaignBehaviorBase)Activator.CreateInstance(temp.add));
@@ -214,12 +230,11 @@ namespace NoHarmony // v0.9.1
                             found = true;
                             if (models[index].GetType() == temp.add)
                             {
-                                Log.Info($"Model {temp.add.Name} already present.");
+                                Log(LogLvl.Warning, $"Model {temp.add.Name} already present.");
                             }
                             else
                             {
-                                if (Logging)
-                                    Log.Info($"{temp.replace.Name} found. Replacing with {temp.add.Name}");
+                                Log(LogLvl.Info, $"{temp.replace.Name} found. Replacing with {temp.add.Name}");
                                 models[index] = (GameModel)Activator.CreateInstance(temp.add);
                             }
                         }
@@ -228,7 +243,7 @@ namespace NoHarmony // v0.9.1
                     {
                         if (temp.replace != null && temp.mode == ModeReplace.Replace)
                         {
-                            Log.Info($"Model {temp.replace.Name} not found.");
+                            Log(LogLvl.Warning, $"Model {temp.replace.Name} not found.");
                             continue;
                         }
                         gameInitializer.AddModel((GameModel)Activator.CreateInstance(temp.add));
@@ -238,52 +253,54 @@ namespace NoHarmony // v0.9.1
             }
         }
 
-        //logging stuff
-        protected override void OnSubModuleLoad()
+        //Logging Core
+        public void Log(LogLvl mLvl, string message)
         {
-            NLog.Config.LoggingConfiguration logConfig = new NLog.Config.LoggingConfiguration();
-            NLog.Targets.FileTarget logFile = new NLog.Targets.FileTarget(LogFileTarget()) { FileName = LogFilePath() };
-
-            logConfig.AddRule(NLog.LogLevel.Debug, NLog.LogLevel.Fatal, logFile);
-            NLog.LogManager.Configuration = logConfig;
-            NHLTodo = new List<NHLTask>();
-            NHLLogging(PhaseLog.OnSubModuleLoad, null);
+            if (mLvl.CompareTo(MinLogLvl) < 0 || !Logging)
+                return;
+            switch (mLvl)
+            {
+                case LogLvl.Error:
+                    message = "!!![Error] " + message + " !!!";
+                    break;
+                case LogLvl.Warning:
+                    message = "[Warn]/!\\ " + message;
+                    break;
+                case LogLvl.Info:
+                    message = "[Info] " + message;
+                    break;
+                case LogLvl.Tracking:
+                    message = "[Track] " + message;
+                    break;
+            }
+            using (StreamWriter sw = new StreamWriter(LogFile, true))
+                sw.WriteLine(DateTime.Now.ToString("dd/mm/yy HH:mm:ss.fff") + " > " + message);
         }
 
         protected void NHLLogging(PhaseLog phase, object starterObject)
         {
             if (!Logging || (PhaseToLog != PhaseLog.All && phase != PhaseToLog))
                 return;
-            Log.Info(phase);
+            Log(LogLvl.Info, phase.ToString());
             if (starterObject == null)
                 return;
             CampaignGameStarter gameStarter = (CampaignGameStarter)starterObject;
             if (gameStarter.Models is IList<GameModel> models && (ObjectsToLog == TypeLog.All || ObjectsToLog == TypeLog.Models))
             {
-                Log.Info(" @ Model list");
+                Log(LogLvl.Tracking, " * Model list");
                 for (int index = 0; index < models.Count; ++index)
                 {
-                    Log.Info(index + " -> " + models[index].GetType().ToString());
+                    Log(LogLvl.Tracking, index + " -> " + models[index].GetType().ToString());
                 }
             }
             if (gameStarter.CampaignBehaviors is IList<CampaignBehaviorBase> cBehaviors && (ObjectsToLog == TypeLog.All || ObjectsToLog == TypeLog.Behaviors))
             {
-                Log.Info(" @ Behavior list");
+                Log(LogLvl.Tracking, " * Behavior list");
                 for (int index = 0; index < cBehaviors.Count; ++index)
                 {
-                    Log.Info(index + " -> " + cBehaviors[index].GetType().ToString());
+                    Log(LogLvl.Tracking, index + " -> " + cBehaviors[index].GetType().ToString());
                 }
             }
-        }
-
-        protected virtual string LogFileTarget()
-        {
-            return "NoHarmony";
-        }
-        protected virtual string LogFilePath()
-        {
-            // The default, relative path will place the log in $(GameFolder)\bin\Win64_Shipping_Client\
-            return "NoHarmony.txt";
         }
     }
 }
