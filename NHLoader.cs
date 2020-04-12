@@ -5,7 +5,7 @@ using TaleWorlds.Core;
 using TaleWorlds.MountAndBlade;
 using TaleWorlds.CampaignSystem;
 
-namespace NoHarmony // v0.9.2
+namespace NoHarmony // v0.9.2a
 {
     public class NoHarmonyLoader : MBSubModuleBase
     {
@@ -133,7 +133,7 @@ namespace NoHarmony // v0.9.2
         }
         
         /// <summary>
-        /// Method to use in NoHarmonyInit() to add models or campaignbehavior to the game.
+        /// Method to use in NoHarmonyLoad() to add models or campaignbehavior to the game.
         /// </summary>
         /// <param name="addedObject">Model or Behavior type to add</param>
         /// <param name="replacedObject">Model or Behavior type you want replaced (not required)</param>
