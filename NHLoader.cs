@@ -5,9 +5,9 @@ using TaleWorlds.Core;
 using TaleWorlds.MountAndBlade;
 using TaleWorlds.CampaignSystem;
 
-namespace NoHarmony // v0.9.2a
+namespace NoHarmony // v0.9.3
 {
-    public class NoHarmonyLoader : MBSubModuleBase
+    public abstract class NoHarmonyLoader : MBSubModuleBase
     {
         public bool Logging = true; //        Enable basic logging
         public bool NHLStopOnError = true; // Stop on error = true, try to continue = false
@@ -20,20 +20,14 @@ namespace NoHarmony // v0.9.2a
         /// <summary>
         /// Put here all the code ou want executed before the game mains's menu
         /// </summary>
-        public virtual void NoHarmonyInit()
-        {
-
-        }
+        public abstract void NoHarmonyInit();
 
         /// <summary>
         /// Put here all behaviors and models you want NoHarmony to handle using method "AddItem".
         /// Public NoHarmony variables can be changed here.
         /// </summary>
-        public virtual void NoHarmonyLoad()
-        {
+        public abstract void NoHarmonyLoad();
 
-
-        }
 
 
         //logging stuff
@@ -131,11 +125,65 @@ namespace NoHarmony // v0.9.2a
                 phase = p;
             }
         }
-        
+
         /// <summary>
-        /// Method to use in NoHarmonyLoad() to add models or campaignbehavior to the game.
+        /// Use it to add a campaignbehavior to the game. If the model might already be present use ReplaceBehavior instead.
         /// </summary>
-        /// <param name="addedObject">Model or Behavior type to add</param>
+        /// <typeparam name="AddType">The behavior you want to add.</typeparam>
+        /// <param name="mode"></param>
+        /// <param name="insert"></param>
+        protected void AddBehavior<AddType>(ModeReplace mode = ModeReplace.ReplaceOrAdd, AddToPhase insert = AddToPhase.Auto)
+            where AddType : CampaignBehaviorBase
+        {
+            AddItem(typeof(AddType), null, mode, insert);
+        }
+
+        /// <summary>
+        /// Use it to add a model to the game. If the model might already be present use ReplaceModel instead.
+        /// </summary>
+        /// <typeparam name="AddType">The model you want to add.</typeparam>
+        /// <param name="mode"></param>
+        /// <param name="insert"></param>
+        protected void AddModel<AddType>(ModeReplace mode = ModeReplace.ReplaceOrAdd, AddToPhase insert = AddToPhase.Auto)
+            where AddType : GameModel
+        {
+            AddItem(typeof(AddType), null, mode, insert);
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <typeparam name="AddType"></typeparam>
+        /// <typeparam name="ReplaceType"></typeparam>
+        /// <param name="mode"></param>
+        /// <param name="insert"></param>
+        protected void ReplaceBehavior<AddType,ReplaceType>(ModeReplace mode = ModeReplace.ReplaceOrAdd, AddToPhase insert = AddToPhase.Auto)
+            where ReplaceType : CampaignBehaviorBase
+            where AddType : ReplaceType
+        {
+            AddItem(typeof(AddType), typeof(ReplaceType), mode, insert);
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <typeparam name="AddType"></typeparam>
+        /// <typeparam name="ReplaceType"></typeparam>
+        /// <param name="mode"></param>
+        /// <param name="insert"></param>
+        protected void ReplaceModel<AddType, ReplaceType>(ModeReplace mode = ModeReplace.ReplaceOrAdd, AddToPhase insert = AddToPhase.Auto)
+            where ReplaceType : GameModel
+            where AddType : ReplaceType
+        {
+            AddItem(typeof(AddType), typeof(ReplaceType), mode, insert);
+        }
+
+
+        /// <summary>
+        /// You should use AddBehavior AddModel ReplaceBehavior ReplaceModel instead of this method, they are less prone to errors
+        /// Method to use in NoHarmonyLoader() to add models or campaignbehavior to the game.
+        /// </summary>
+        /// <param name="addedObject">Model or Behavior type to add (use "typeof()")</param>
         /// <param name="replacedObject">Model or Behavior type you want replaced (not required)</param>
         /// <param name="mode">Mode used for replace</param>
         /// <param name="insert">When should the object be added. Auto let's NoHarmony decide.</param>
