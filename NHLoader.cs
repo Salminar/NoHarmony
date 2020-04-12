@@ -4,27 +4,26 @@ using TaleWorlds.Core;
 using TaleWorlds.MountAndBlade;
 using TaleWorlds.CampaignSystem;
 
-namespace NoHarmony // ver 0.8.2
+namespace NoHarmony // ver 0.8.3
 {
     public class NoHarmonyLoader : MBSubModuleBase
     {
         protected static readonly NLog.Logger Log = NLog.LogManager.GetCurrentClassLogger();
-        public static bool Logging = true; //        Enable basic logging
-        public static bool NHLStopOnError = true; // Stop on error = true, try to continue = false
-        public static PhaseLog NHLPhase = PhaseLog.All;
-        public static TypeLog NHLType = TypeLog.None;
+        public bool Logging = true; //        Enable basic logging
+        public bool NHLStopOnError = true; // Stop on error = true, try to continue = false
+        public PhaseLog PhaseToLog = PhaseLog.All;
+        public TypeLog ObjectsToLog = TypeLog.None;
 
 
         /// <summary>
-        /// Put here all behaviors and models you want NoHarmony to handle using method AddItem
+        /// Put here all behaviors and models you want NoHarmony to handle using method "AddItem".
+        /// Public NoHarmony variables can be changed here.
         /// </summary>
         protected void NoHarmonyInit()
         {
 
+
         }
-
-
-
 
 
         /// <summary>
@@ -40,7 +39,8 @@ namespace NoHarmony // ver 0.8.2
                 return;
             }
             NHLLogging(PhaseLog.OnGameStart, gameStarterObject);
-            
+            CampaignGameStarter gameInitializer = (CampaignGameStarter)gameStarterObject;
+            NHHandler(gameInitializer, AddToPhase.OnGameStart);
         }
 
         /// <summary>
@@ -56,7 +56,7 @@ namespace NoHarmony // ver 0.8.2
             }
             NHLLogging(PhaseLog.OnCampaignStart, starterObject);
             CampaignGameStarter gameInitializer = (CampaignGameStarter)starterObject;
-
+            NHHandler(gameInitializer, AddToPhase.OnCampaignStart);
         }
 
         /// <summary>
@@ -71,6 +71,8 @@ namespace NoHarmony // ver 0.8.2
                 return;
             }
             NHLLogging(PhaseLog.OnNewGameCreated, initializerObject);
+            CampaignGameStarter gameInitializer = (CampaignGameStarter)initializerObject;
+            NHHandler(gameInitializer, AddToPhase.OnNewGameCreated);
         }
 
         /// <summary>
@@ -86,8 +88,10 @@ namespace NoHarmony // ver 0.8.2
             }
             NHLLogging(PhaseLog.OnGameLoaded, initializerObject);
             CampaignGameStarter gameInitializer = (CampaignGameStarter)initializerObject;
+            NHHandler(gameInitializer, AddToPhase.OnGameLoaded);
         }
 
+        // NoHarmony core features past this point
         public enum ModeReplace { Replace = 0, ReplaceOrAdd = 1 }
         public enum PhaseLog { None, All, OnGameStart, OnCampaignStart, OnGameLoaded, OnNewGameCreated, OnSubModuleLoad }
         public enum AddToPhase { Auto, OnGameStart, OnCampaignStart, OnGameLoaded, OnNewGameCreated}
@@ -107,8 +111,9 @@ namespace NoHarmony // ver 0.8.2
             }
 
         }
+
         /// <summary>
-        /// 
+        /// Method to use in NoHarmonyInit() to add models or campaignbehavior to the game.
         /// </summary>
         /// <param name="addedObject">Model or Behavior type to add</param>
         /// <param name="replacedObject">Model or Behavior type you want replaced (not required)</param>
@@ -242,13 +247,13 @@ namespace NoHarmony // ver 0.8.2
 
         protected void NHLLogging(PhaseLog phase, object starterObject)
         {
-            if (!Logging || (NHLPhase != PhaseLog.All && phase != NHLPhase))
+            if (!Logging || (PhaseToLog != PhaseLog.All && phase != PhaseToLog))
                 return;
             Log.Info(phase);
             if (starterObject == null)
                 return;
             CampaignGameStarter gameStarter = (CampaignGameStarter)starterObject;
-            if (gameStarter.Models is IList<GameModel> models && (NHLType == TypeLog.All || NHLType == TypeLog.Models))
+            if (gameStarter.Models is IList<GameModel> models && (ObjectsToLog == TypeLog.All || ObjectsToLog == TypeLog.Models))
             {
                 Log.Info(" @ Model list");
                 for (int index = 0; index < models.Count; ++index)
@@ -256,7 +261,7 @@ namespace NoHarmony // ver 0.8.2
                     Log.Info(index + " -> "+models[index].GetType().ToString());
                 }
             }
-            if (gameStarter.CampaignBehaviors is IList<CampaignBehaviorBase> cBehaviors && (NHLType == TypeLog.All || NHLType == TypeLog.Behaviors))
+            if (gameStarter.CampaignBehaviors is IList<CampaignBehaviorBase> cBehaviors && (ObjectsToLog == TypeLog.All || ObjectsToLog == TypeLog.Behaviors))
             {
                 Log.Info(" @ Behavior list");
                 for (int index = 0; index < cBehaviors.Count; ++index)
@@ -270,7 +275,6 @@ namespace NoHarmony // ver 0.8.2
         {
             return "NoHarmony";
         }
-
         protected virtual string LogFilePath()
         {
             // The default, relative path will place the log in $(GameFolder)\bin\Win64_Shipping_Client\
