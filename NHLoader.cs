@@ -4,7 +4,7 @@ using TaleWorlds.Core;
 using TaleWorlds.MountAndBlade;
 using TaleWorlds.CampaignSystem;
 
-namespace NoHarmony // v0.9.0
+namespace NoHarmony // v0.9.1
 {
     public class NoHarmonyLoader : MBSubModuleBase
     {
@@ -15,11 +15,13 @@ namespace NoHarmony // v0.9.0
         public TypeLog ObjectsToLog = TypeLog.None;
 
 
+        public virtual void NoHarmonyInit() { }
+
         /// <summary>
         /// Put here all behaviors and models you want NoHarmony to handle using method "AddItem".
         /// Public NoHarmony variables can be changed here.
         /// </summary>
-        public virtual void NoHarmonyInit()
+        public virtual void NoHarmonyLoad()
         {
 
 
@@ -33,7 +35,7 @@ namespace NoHarmony // v0.9.0
         /// <param name="gameStarterObject"></param>
         protected override void OnGameStart(Game game, IGameStarter gameStarterObject)
         {
-            NoHarmonyInit();
+            NoHarmonyLoad();
             if (!(game.GameType is Campaign))
             {
                 return;
