@@ -1,0 +1,35 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net472</TargetFrameworks>
+    <Version>1.0.0.0</Version>
+    <Product>ExampleSubModule</Product>
+    <RootNamespace>$(Product)</RootNamespace>
+    <AssemblyName>$(Product)</AssemblyName>
+	  <GameFolder>Z:\jeux\steamapps\common\Mount &amp; Blade II Bannerlord</GameFolder>
+    <ModDir>$(SolutionDir)$(Product)</ModDir>
+    <BinDir>$(SolutionDir)$(Product)\bin\Win64_Shipping_Client</BinDir>
+    <ModuleDir>$(GameFolder)\Modules\$(Product)</ModuleDir>
+    
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <PlatformTarget>x64</PlatformTarget>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="$(GameFolder)\bin\Win64_Shipping_Client\TaleWorlds.*.dll">
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="NoHarmonyLoader">
+      <HintPath>ExampleSubModule\bin\Win64_Shipping_Client\NoHarmonyLoader.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+
+  <Target Name="PostBuild" AfterTargets="PostBuildEvent">
+    <Exec Command="xcopy /y &quot;$(TargetDir)$(Product).dll&quot; &quot;$(BinDir)&quot;&#xD;&#xA;(robocopy /mir &quot;$(ModDir)&quot; &quot;$(ModuleDir)&quot;) ^&amp; if %25errorlevel%25 leq 1 exit 0&#xD;&#xA;" />
+  </Target>
+
+</Project>

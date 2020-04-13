@@ -1,11 +1,11 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Collections.Generic;
 using TaleWorlds.Core;
 using TaleWorlds.MountAndBlade;
 using TaleWorlds.CampaignSystem;
 
-namespace NoHarmony // v0.9.3
+namespace NoHarmony // v0.9.4
 {
     public abstract class NoHarmonyLoader : MBSubModuleBase
     {
@@ -23,19 +23,21 @@ namespace NoHarmony // v0.9.3
         public abstract void NoHarmonyInit();
 
         /// <summary>
-        /// Put here all behaviors and models you want NoHarmony to handle using method "AddItem".
+        /// Put here all behaviors and models you want NoHarmony to handle using method AddBehavior ReplaceBehavior AddModel ReplaceModel.
         /// Public NoHarmony variables can be changed here.
         /// </summary>
         public abstract void NoHarmonyLoad();
 
 
 
-        //logging stuff
+        /// <summary>
+        /// Called before the main menu.
+        /// </summary>
         protected override void OnSubModuleLoad()
         {
-
             NHLTodo = new List<NHLTask>();
             NHLLogging(PhaseLog.OnSubModuleLoad, null);
+            NoHarmonyInit();
         }
 
         
@@ -151,7 +153,7 @@ namespace NoHarmony // v0.9.3
         }
 
         /// <summary>
-        /// 
+        /// Use it to replace a behavior.
         /// </summary>
         /// <typeparam name="AddType"></typeparam>
         /// <typeparam name="ReplaceType"></typeparam>
