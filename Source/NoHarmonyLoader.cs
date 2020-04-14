@@ -5,15 +5,26 @@ using TaleWorlds.Core;
 using TaleWorlds.MountAndBlade;
 using TaleWorlds.CampaignSystem;
 
-namespace NoHarmony // v0.9.4
+namespace NoHarmony // v0.9.5
 {
     public abstract class NoHarmonyLoader : MBSubModuleBase
     {
-        public bool Logging = true; //        Enable basic logging
-        public bool NHLStopOnError = true; // Stop on error = true, try to continue = false
+        /// <summary>
+        /// activate or disable logging
+        /// </summary>
+        public bool Logging = true;
+
+        /// <summary>
+        /// Makes NoHarmony stop on error. Currently not implemented
+        /// </summary>
+        public bool NHLStopOnError = true;
         public PhaseLog PhaseToLog = PhaseLog.All;
         public TypeLog ObjectsToLog = TypeLog.None;
         public LogLvl MinLogLvl = LogLvl.Info;
+
+        /// <summary>
+        /// File you want noHarmony to log it's messages
+        /// </summary>
         public string LogFile = "NoHarmony.txt";
 
 
@@ -40,7 +51,7 @@ namespace NoHarmony // v0.9.4
             NoHarmonyInit();
         }
 
-        
+
         /// <summary>
         /// Called first in order, always executed. Models are loaded here usually.
         /// </summary>
@@ -49,6 +60,7 @@ namespace NoHarmony // v0.9.4
         protected override void OnGameStart(Game game, IGameStarter gameStarterObject)
         {
             NoHarmonyLoad();
+            LogNHList();
             if (!(game.GameType is Campaign))
             {
                 return;
@@ -128,6 +140,9 @@ namespace NoHarmony // v0.9.4
             }
         }
 
+
+
+
         /// <summary>
         /// Use it to add a campaignbehavior to the game. If the model might already be present use ReplaceBehavior instead.
         /// </summary>
@@ -159,7 +174,7 @@ namespace NoHarmony // v0.9.4
         /// <typeparam name="ReplaceType"></typeparam>
         /// <param name="mode"></param>
         /// <param name="insert"></param>
-        protected void ReplaceBehavior<AddType,ReplaceType>(ModeReplace mode = ModeReplace.ReplaceOrAdd, AddToPhase insert = AddToPhase.Auto)
+        protected void ReplaceBehavior<AddType, ReplaceType>(ModeReplace mode = ModeReplace.ReplaceOrAdd, AddToPhase insert = AddToPhase.Auto)
             where ReplaceType : CampaignBehaviorBase
             where AddType : ReplaceType
         {
@@ -221,9 +236,10 @@ namespace NoHarmony // v0.9.4
         {
             IList<CampaignBehaviorBase> cBehaviors = gameInitializer.CampaignBehaviors as IList<CampaignBehaviorBase>;
             IList<GameModel> models = gameInitializer.Models as IList<GameModel>;
-
+            
             foreach (NHLTask temp in NHLTodo)
             {
+                
                 if (temp.replace == typeof(GameModel) || temp.replace == typeof(CampaignBehaviorBase))
                 {
                     continue;
@@ -252,9 +268,11 @@ namespace NoHarmony // v0.9.4
                             else
                             {
                                 Log(LogLvl.Info, $"{temp.replace.Name} found. Replacing with {temp.add.Name}");
+                                ClearEvents(cBehaviors[index]);
                                 cBehaviors[index] = (CampaignBehaviorBase)Activator.CreateInstance(temp.add);
                             }
                         }
+
                     }
                     if (!found)
                     {
@@ -262,7 +280,8 @@ namespace NoHarmony // v0.9.4
                         {
                             Log(LogLvl.Warning, $"Behavior {temp.replace.Name} not found.");
                             continue;
-                        }
+                        }else
+                            Log(LogLvl.Info, $"Behavior {temp.add.Name} added.");
                         gameInitializer.AddBehavior((CampaignBehaviorBase)Activator.CreateInstance(temp.add));
                     }
                 }
@@ -295,13 +314,28 @@ namespace NoHarmony // v0.9.4
                         {
                             Log(LogLvl.Warning, $"Model {temp.replace.Name} not found.");
                             continue;
-                        }
+                        }else
+                            Log(LogLvl.Info, $"Model {temp.add.Name} added.");
                         gameInitializer.AddModel((GameModel)Activator.CreateInstance(temp.add));
                     }
                 }
 
             }
         }
+
+        public void ClearEvents(CampaignBehaviorBase bId)
+        {
+            Type t = typeof(CampaignEvents);
+            foreach (var test in t.GetProperties())
+            {
+                if (test.PropertyType != t) 
+                {
+                    var m = test.PropertyType.GetMethod("ClearListeners");
+                    m?.Invoke(test.GetValue(CampaignEvents.Instance), new object[] { bId }); 
+                }
+            }
+        }
+
 
         //Logging Core
         public void Log(LogLvl mLvl, string message)
@@ -324,8 +358,19 @@ namespace NoHarmony // v0.9.4
                     break;
             }
             using (StreamWriter sw = new StreamWriter(LogFile, true))
-                sw.WriteLine(DateTime.Now.ToString("dd/mm/yy HH:mm:ss.fff") + " > " + message);
+                sw.WriteLine(DateTime.Now.ToString("dd/MM/yy HH:mm:ss.fff") + " > " + message);
         }
+
+        protected void LogNHList()
+        {
+            Log(LogLvl.Info, "Tasks : " + NHLTodo.Count);
+            foreach (NHLTask tmp in NHLTodo) 
+            {
+                Log(LogLvl.Info, tmp.add.ToString() + " => " + tmp.replace.ToString() + " - " + tmp.phase.ToString() + " - " + tmp.mode.ToString());
+            }
+            Log(LogLvl.Info, "---");
+        }
+
 
         protected void NHLLogging(PhaseLog phase, object starterObject)
         {
