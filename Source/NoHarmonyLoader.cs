@@ -4,53 +4,42 @@ using System.Collections.Generic;
 using TaleWorlds.Core;
 using TaleWorlds.MountAndBlade;
 using TaleWorlds.CampaignSystem;
+using TaleWorlds.CampaignSystem.SandBox.CampaignBehaviors;
 
-namespace NoHarmony // v0.9.5
+
+namespace NoHarmony //Exp v0.9.7
 {
     public abstract class NoHarmonyLoader : MBSubModuleBase
     {
-        /// <summary>
-        /// activate or disable logging
-        /// </summary>
         public bool Logging = true;
-
-        /// <summary>
-        /// Makes NoHarmony stop on error. Currently not implemented
-        /// </summary>
-        public bool NHLStopOnError = true;
-        public PhaseLog PhaseToLog = PhaseLog.All;
         public TypeLog ObjectsToLog = TypeLog.None;
         public LogLvl MinLogLvl = LogLvl.Info;
-
-        /// <summary>
-        /// File you want noHarmony to log it's messages
-        /// </summary>
         public string LogFile = "NoHarmony.txt";
 
-
         /// <summary>
-        /// Put here all the code ou want executed before the game mains's menu
+        /// Put NoHarmony Initialise code here
         /// </summary>
         public abstract void NoHarmonyInit();
 
         /// <summary>
-        /// Put here all behaviors and models you want NoHarmony to handle using method AddBehavior ReplaceBehavior AddModel ReplaceModel.
-        /// Public NoHarmony variables can be changed here.
+        /// Use add and replace NoHarmony methods here to load your modules;
         /// </summary>
         public abstract void NoHarmonyLoad();
+        //End config
 
-
-
+        //Submodule methodes representing various game initialisation phases,
         /// <summary>
         /// Called before the main menu.
         /// </summary>
         protected override void OnSubModuleLoad()
         {
-            NHLTodo = new List<NHLTask>();
-            NHLLogging(PhaseLog.OnSubModuleLoad, null);
             NoHarmonyInit();
+            BTasks = new List<NHLTask>();
+            MTasks = new List<NHLTask>();
+            IsInit = true;
+            NoHarmonyLoad();
+            Log(LogLvl.Info, "Pending tasks : " + BTasks.Count + " models, " + MTasks.Count + " behaviors.");
         }
-
 
         /// <summary>
         /// Called first in order, always executed. Models are loaded here usually.
@@ -59,87 +48,41 @@ namespace NoHarmony // v0.9.5
         /// <param name="gameStarterObject"></param>
         protected override void OnGameStart(Game game, IGameStarter gameStarterObject)
         {
-            NoHarmonyLoad();
-            LogNHList();
             if (!(game.GameType is Campaign))
-            {
                 return;
-            }
-            NHLLogging(PhaseLog.OnGameStart, gameStarterObject);
             CampaignGameStarter gameInitializer = (CampaignGameStarter)gameStarterObject;
-            NHHandler(gameInitializer, AddToPhase.OnGameStart);
+            NHLModel(gameInitializer);
         }
 
         /// <summary>
-        /// Executed after OngameStart and only for a new campaign. Campaign behaviors are loaded here usually. (Used when OnGameLoaded is not triggered)
+        /// Executed after the initializer is integrated to the campaign object. You can't add models anymore.
         /// </summary>
         /// <param name="game"></param>
-        /// <param name="starterObject"></param>
-        public override void OnCampaignStart(Game game, object starterObject)
+        public override void OnGameInitializationFinished(Game game)
         {
-            if (!(game.GameType is Campaign))
-            {
+            if (!(game.GameType is Campaign campaign))
                 return;
-            }
-            NHLLogging(PhaseLog.OnCampaignStart, starterObject);
-            CampaignGameStarter gameInitializer = (CampaignGameStarter)starterObject;
-            NHHandler(gameInitializer, AddToPhase.OnCampaignStart);
-        }
-
-        /// <summary>
-        /// Executed after OnCampaignStart, for new games only.
-        /// </summary>
-        /// <param name="game"></param>
-        /// <param name="initializerObject"></param>
-        public override void OnNewGameCreated(Game game, object initializerObject)
-        {
-            if (!(game.GameType is Campaign))
-            {
-                return;
-            }
-            NHLLogging(PhaseLog.OnNewGameCreated, initializerObject);
-            CampaignGameStarter gameInitializer = (CampaignGameStarter)initializerObject;
-            NHHandler(gameInitializer, AddToPhase.OnNewGameCreated);
-        }
-
-        /// <summary>
-        /// Executed when a game is loaded, after OngameStart. Campaign behaviors are loaded here usually. (used when OnCampaignStart is not triggered)
-        /// </summary>
-        /// <param name="game"></param>
-        /// <param name="initializerObject"></param>
-        public override void OnGameLoaded(Game game, object initializerObject)
-        {
-            if (!(game.GameType is Campaign))
-            {
-                return;
-            }
-            NHLLogging(PhaseLog.OnGameLoaded, initializerObject);
-            CampaignGameStarter gameInitializer = (CampaignGameStarter)initializerObject;
-            NHHandler(gameInitializer, AddToPhase.OnGameLoaded);
+            NHLBehavior(campaign);
         }
 
         // NoHarmony core features past this point
-        public enum ModeReplace { Replace = 0, ReplaceOrAdd = 1 }
-        public enum PhaseLog { None, All, OnGameStart, OnCampaignStart, OnGameLoaded, OnNewGameCreated, OnSubModuleLoad }
-        public enum AddToPhase { Auto, OnGameStart, OnCampaignStart, OnGameLoaded, OnNewGameCreated }
+        public enum TaskMode { Replace = 0, ReplaceOrAdd = 1, RemoveAndAdd = 2 }
         public enum TypeLog { None = 0, Models = 1, Behaviors = 2, All = 3 }
-        private List<NHLTask> NHLTodo;
         public enum LogLvl { Tracking = 0, Info = 1, Warning = 2, Error = 3 }
-
+        private bool IsInit = false;
+        List<NHLTask> BTasks;
+        List<NHLTask> MTasks;
         private struct NHLTask
         {
-            public Type add, replace;
-            public ModeReplace mode;
-            public AddToPhase phase;
-            public NHLTask(Type a, Type b, ModeReplace m, AddToPhase p)
+            public Type add, remove;
+            public TaskMode mode;
+            public NHLTask(Type a, Type b, TaskMode m)
             {
                 add = a;
-                replace = b;
+                remove = b;
                 mode = m;
-                phase = p;
             }
         }
-
 
 
 
@@ -147,24 +90,22 @@ namespace NoHarmony // v0.9.5
         /// Use it to add a campaignbehavior to the game. If the model might already be present use ReplaceBehavior instead.
         /// </summary>
         /// <typeparam name="AddType">The behavior you want to add.</typeparam>
-        /// <param name="mode"></param>
-        /// <param name="insert"></param>
-        protected void AddBehavior<AddType>(ModeReplace mode = ModeReplace.ReplaceOrAdd, AddToPhase insert = AddToPhase.Auto)
+        /// <param name="mode">Unused, only for compatibility with NoHarmony</param>
+        protected void AddBehavior<AddType>(TaskMode mode = TaskMode.ReplaceOrAdd)
             where AddType : CampaignBehaviorBase
         {
-            AddItem(typeof(AddType), null, mode, insert);
+            BTasks.Add(new NHLTask(typeof(AddType), null, TaskMode.ReplaceOrAdd));
         }
 
         /// <summary>
         /// Use it to add a model to the game. If the model might already be present use ReplaceModel instead.
         /// </summary>
         /// <typeparam name="AddType">The model you want to add.</typeparam>
-        /// <param name="mode"></param>
-        /// <param name="insert"></param>
-        protected void AddModel<AddType>(ModeReplace mode = ModeReplace.ReplaceOrAdd, AddToPhase insert = AddToPhase.Auto)
+        /// <param name="mode">Unused, only for compatibility with NoHarmony</param>
+        protected void AddModel<AddType>(TaskMode mode = TaskMode.ReplaceOrAdd)
             where AddType : GameModel
         {
-            AddItem(typeof(AddType), null, mode, insert);
+            MTasks.Add(new NHLTask(typeof(AddType), null, TaskMode.ReplaceOrAdd));
         }
 
         /// <summary>
@@ -173,165 +114,81 @@ namespace NoHarmony // v0.9.5
         /// <typeparam name="AddType"></typeparam>
         /// <typeparam name="ReplaceType"></typeparam>
         /// <param name="mode"></param>
-        /// <param name="insert"></param>
-        protected void ReplaceBehavior<AddType, ReplaceType>(ModeReplace mode = ModeReplace.ReplaceOrAdd, AddToPhase insert = AddToPhase.Auto)
+        protected void ReplaceBehavior<AddType, ReplaceType>(TaskMode mode = TaskMode.ReplaceOrAdd)
             where ReplaceType : CampaignBehaviorBase
             where AddType : ReplaceType
         {
-            AddItem(typeof(AddType), typeof(ReplaceType), mode, insert);
+            BTasks.Add(new NHLTask(typeof(AddType), typeof(ReplaceType), mode));
         }
 
         /// <summary>
-        /// 
+        /// Use it to replace a model.
         /// </summary>
         /// <typeparam name="AddType"></typeparam>
         /// <typeparam name="ReplaceType"></typeparam>
         /// <param name="mode"></param>
-        /// <param name="insert"></param>
-        protected void ReplaceModel<AddType, ReplaceType>(ModeReplace mode = ModeReplace.ReplaceOrAdd, AddToPhase insert = AddToPhase.Auto)
+        protected void ReplaceModel<AddType, ReplaceType>(TaskMode mode = TaskMode.ReplaceOrAdd)
             where ReplaceType : GameModel
             where AddType : ReplaceType
         {
-            AddItem(typeof(AddType), typeof(ReplaceType), mode, insert);
+            MTasks.Add(new NHLTask(typeof(AddType), typeof(ReplaceType), mode));
         }
 
-
-        /// <summary>
-        /// You should use AddBehavior AddModel ReplaceBehavior ReplaceModel instead of this method, they are less prone to errors
-        /// Method to use in NoHarmonyLoader() to add models or campaignbehavior to the game.
-        /// </summary>
-        /// <param name="addedObject">Model or Behavior type to add (use "typeof()")</param>
-        /// <param name="replacedObject">Model or Behavior type you want replaced (not required)</param>
-        /// <param name="mode">Mode used for replace</param>
-        /// <param name="insert">When should the object be added. Auto let's NoHarmony decide.</param>
-        protected void AddItem(Type addedObject, Type replacedObject = null, ModeReplace mode = ModeReplace.ReplaceOrAdd, AddToPhase insert = AddToPhase.Auto)
+        private void NHLModel(CampaignGameStarter gameI)
         {
-            if (typeof(CampaignBehaviorBase).IsAssignableFrom(addedObject))
+            IList<GameModel> models = gameI.Models as IList<GameModel>;
+            foreach (NHLTask tmp in MTasks)
             {
-                if (insert == AddToPhase.Auto)
+                if (tmp.remove != null)
                 {
-                    NHLTodo.Add(new NHLTask(addedObject, replacedObject, mode, AddToPhase.OnCampaignStart));
-                    NHLTodo.Add(new NHLTask(addedObject, replacedObject, mode, AddToPhase.OnGameLoaded));
-                    return;
-                }
-
-            }
-            else if (typeof(GameModel).IsAssignableFrom(addedObject))
-            {
-                if (insert == AddToPhase.Auto)
-                {
-                    NHLTodo.Add(new NHLTask(addedObject, replacedObject, mode, AddToPhase.OnGameStart));
-                    return;
-                }
-            }
-            else
-            {
-                Log(LogLvl.Error, "Loading error - " + addedObject + " is not a valide model or behavior!");
-                return;
-            }
-            NHLTodo.Add(new NHLTask(addedObject, replacedObject, mode, insert));
-        }
-
-        protected void NHHandler(CampaignGameStarter gameInitializer, AddToPhase call)
-        {
-            IList<CampaignBehaviorBase> cBehaviors = gameInitializer.CampaignBehaviors as IList<CampaignBehaviorBase>;
-            IList<GameModel> models = gameInitializer.Models as IList<GameModel>;
-            
-            foreach (NHLTask temp in NHLTodo)
-            {
-                
-                if (temp.replace == typeof(GameModel) || temp.replace == typeof(CampaignBehaviorBase))
-                {
-                    continue;
-                }
-                if (temp.phase != call)
-                {
-                    continue;
-                }
-
-                if (typeof(CampaignBehaviorBase).IsAssignableFrom(temp.add))
-                {
-                    if (cBehaviors == null)
-                    {
-                        continue;
-                    }
-                    bool found = false;
-                    for (int index = 0; index < cBehaviors.Count; ++index)
-                    {
-                        if (temp.replace != null && cBehaviors[index].GetType().IsAssignableFrom(temp.replace))
-                        {
-                            found = true;
-                            if (cBehaviors[index].GetType() == temp.add)
-                            {
-                                Log(LogLvl.Warning, $"Behavior {temp.add.Name} already present.");
-                            }
-                            else
-                            {
-                                Log(LogLvl.Info, $"{temp.replace.Name} found. Replacing with {temp.add.Name}");
-                                ClearEvents(cBehaviors[index]);
-                                cBehaviors[index] = (CampaignBehaviorBase)Activator.CreateInstance(temp.add);
-                            }
-                        }
-
-                    }
-                    if (!found)
-                    {
-                        if (temp.replace != null && temp.mode == ModeReplace.Replace)
-                        {
-                            Log(LogLvl.Warning, $"Behavior {temp.replace.Name} not found.");
-                            continue;
-                        }else
-                            Log(LogLvl.Info, $"Behavior {temp.add.Name} added.");
-                        gameInitializer.AddBehavior((CampaignBehaviorBase)Activator.CreateInstance(temp.add));
-                    }
-                }
-                if (typeof(GameModel).IsAssignableFrom(temp.add))
-                {
-                    if (models == null)
-                    {
-                        continue;
-                    }
-                    bool found = false;
                     for (int index = 0; index < models.Count; ++index)
                     {
-                        if (temp.replace != null && models[index].GetType().IsAssignableFrom(temp.replace))
+                        if (models[index].GetType().IsAssignableFrom(tmp.remove))
                         {
-                            found = true;
-                            if (models[index].GetType() == temp.add)
-                            {
-                                Log(LogLvl.Warning, $"Model {temp.add.Name} already present.");
-                            }
+                            if (tmp.add != null)
+                                models[index] = (GameModel)Activator.CreateInstance(tmp.add);
                             else
-                            {
-                                Log(LogLvl.Info, $"{temp.replace.Name} found. Replacing with {temp.add.Name}");
-                                models[index] = (GameModel)Activator.CreateInstance(temp.add);
-                            }
+                                models.RemoveAt(index);
+                            break;
                         }
                     }
-                    if (!found)
-                    {
-                        if (temp.replace != null && temp.mode == ModeReplace.Replace)
-                        {
-                            Log(LogLvl.Warning, $"Model {temp.replace.Name} not found.");
-                            continue;
-                        }else
-                            Log(LogLvl.Info, $"Model {temp.add.Name} added.");
-                        gameInitializer.AddModel((GameModel)Activator.CreateInstance(temp.add));
-                    }
                 }
-
+                else
+                {
+                    gameI.AddModel((GameModel)Activator.CreateInstance(tmp.add));
+                }
+            }
+            if (Logging && (ObjectsToLog == TypeLog.All || ObjectsToLog == TypeLog.Models))
+            {
+                Log(LogLvl.Tracking, "List of models :");
+                for (int index = 0; index < models.Count; ++index)
+                {
+                    Log(LogLvl.Tracking, models[index].ToString());
+                }
             }
         }
 
-        public void ClearEvents(CampaignBehaviorBase bId)
+        private void NHLBehavior(Campaign campaign)
         {
-            Type t = typeof(CampaignEvents);
-            foreach (var test in t.GetProperties())
+            CampaignBehaviorManager cbm = (CampaignBehaviorManager)campaign.CampaignBehaviorManager;
+            foreach (NHLTask tmp in BTasks)
             {
-                if (test.PropertyType != t) 
+                if (tmp.remove != null)
                 {
-                    var m = test.PropertyType.GetMethod("ClearListeners");
-                    m?.Invoke(test.GetValue(CampaignEvents.Instance), new object[] { bId }); 
+                    var cgb = typeof(Campaign).GetMethod("GetCampaignBehavior").MakeGenericMethod(tmp.remove).Invoke(campaign, null);
+                    CampaignEvents.RemoveListeners(cgb);
+                    typeof(CampaignBehaviorManager).GetMethod("RemoveBehavior").MakeGenericMethod(tmp.remove).Invoke(cbm, null);
+                }
+                if (tmp.add != null)
+                    cbm.AddBehavior((CampaignBehaviorBase)Activator.CreateInstance(tmp.add));
+            }
+            if (Logging && (ObjectsToLog == TypeLog.All || ObjectsToLog == TypeLog.Behaviors))
+            {
+                Log(LogLvl.Tracking, "List of models :");
+                var cbb = campaign.GetCampaignBehaviors<CampaignBehaviorBase>();
+                foreach (CampaignBehaviorBase tmp in cbb)
+                {
+                    Log(LogLvl.Info, tmp.ToString());
                 }
             }
         }
@@ -345,10 +202,10 @@ namespace NoHarmony // v0.9.5
             switch (mLvl)
             {
                 case LogLvl.Error:
-                    message = "!!![Error] " + message + " !!!";
+                    message = "!![Error] " + message + " !!";
                     break;
                 case LogLvl.Warning:
-                    message = "[Warn]/!\\ " + message;
+                    message = "![Warn] " + message;
                     break;
                 case LogLvl.Info:
                     message = "[Info] " + message;
@@ -359,43 +216,6 @@ namespace NoHarmony // v0.9.5
             }
             using (StreamWriter sw = new StreamWriter(LogFile, true))
                 sw.WriteLine(DateTime.Now.ToString("dd/MM/yy HH:mm:ss.fff") + " > " + message);
-        }
-
-        protected void LogNHList()
-        {
-            Log(LogLvl.Info, "Tasks : " + NHLTodo.Count);
-            foreach (NHLTask tmp in NHLTodo) 
-            {
-                Log(LogLvl.Info, tmp.add.ToString() + " => " + tmp.replace.ToString() + " - " + tmp.phase.ToString() + " - " + tmp.mode.ToString());
-            }
-            Log(LogLvl.Info, "---");
-        }
-
-
-        protected void NHLLogging(PhaseLog phase, object starterObject)
-        {
-            if (!Logging || (PhaseToLog != PhaseLog.All && phase != PhaseToLog))
-                return;
-            Log(LogLvl.Info, phase.ToString());
-            if (starterObject == null)
-                return;
-            CampaignGameStarter gameStarter = (CampaignGameStarter)starterObject;
-            if (gameStarter.Models is IList<GameModel> models && (ObjectsToLog == TypeLog.All || ObjectsToLog == TypeLog.Models))
-            {
-                Log(LogLvl.Tracking, " * Model list");
-                for (int index = 0; index < models.Count; ++index)
-                {
-                    Log(LogLvl.Tracking, index + " -> " + models[index].GetType().ToString());
-                }
-            }
-            if (gameStarter.CampaignBehaviors is IList<CampaignBehaviorBase> cBehaviors && (ObjectsToLog == TypeLog.All || ObjectsToLog == TypeLog.Behaviors))
-            {
-                Log(LogLvl.Tracking, " * Behavior list");
-                for (int index = 0; index < cBehaviors.Count; ++index)
-                {
-                    Log(LogLvl.Tracking, index + " -> " + cBehaviors[index].GetType().ToString());
-                }
-            }
         }
     }
 }
