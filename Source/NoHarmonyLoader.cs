@@ -7,7 +7,7 @@ using TaleWorlds.CampaignSystem;
 using TaleWorlds.CampaignSystem.SandBox.CampaignBehaviors;
 
 
-namespace NoHarmony //Exp v0.9.7
+namespace NoHarmony //Exp v0.9.8
 {
     public abstract class NoHarmonyLoader : MBSubModuleBase
     {
@@ -34,11 +34,9 @@ namespace NoHarmony //Exp v0.9.7
         protected override void OnSubModuleLoad()
         {
             NoHarmonyInit();
-            BTasks = new List<NHLTask>();
-            MTasks = new List<NHLTask>();
             IsInit = true;
             NoHarmonyLoad();
-            Log(LogLvl.Info, "Pending tasks : " + BTasks.Count + " models, " + MTasks.Count + " behaviors.");
+            Log(LogLvl.Info, "Pending tasks : " + ModelDelegates.Count + " models, " + BehaviorDelegates.Count + " behaviors.");
         }
 
         /// <summary>
@@ -49,9 +47,20 @@ namespace NoHarmony //Exp v0.9.7
         protected override void OnGameStart(Game game, IGameStarter gameStarterObject)
         {
             if (!(game.GameType is Campaign))
+            {
+                Log(LogLvl.Error, "Game is not a campaign.");
                 return;
-            CampaignGameStarter gameInitializer = (CampaignGameStarter)gameStarterObject;
-            NHLModel(gameInitializer);
+            }
+            if (ModelDelegates.Count != ModelModes.Count)
+            {
+                Log(LogLvl.Error, "Task lost during Init, skiping all models modification.");
+                return;
+            }
+            for (int index = 0; index < ModelDelegates.Count; ++index)
+            {
+                TaskStatus result = ModelDelegates[index].Invoke(gameStarterObject, ModelModes[index]);
+                TSModels.Add(result);
+            }
         }
 
         /// <summary>
@@ -61,136 +70,137 @@ namespace NoHarmony //Exp v0.9.7
         public override void OnGameInitializationFinished(Game game)
         {
             if (!(game.GameType is Campaign campaign))
+            {
+                Log(LogLvl.Error, "Game is not a campaign.");
                 return;
-            NHLBehavior(campaign);
+            }
+            if(BehaviorDelegates.Count != BehaviorModes.Count)
+            {
+                Log(LogLvl.Error, "Task lost during Init, skiping all behaviors modification.");
+                return;
+            }
+            for (int index = 0; index < BehaviorDelegates.Count; ++index)
+            {
+                TaskStatus result = BehaviorDelegates[index].Invoke(campaign, BehaviorModes[index]);
+                TSBehaviors.Add(result);
+            }
+
         }
 
         // NoHarmony core features past this point
-        public enum TaskMode { Replace = 0, ReplaceOrAdd = 1, RemoveAndAdd = 2 }
+        private delegate TaskStatus ModelDelegate(IGameStarter gameStarter, TaskMode mode);
+        private delegate TaskStatus BehaviorDelegate(Campaign campaign, TaskMode mode);
+
+        private List<ModelDelegate> ModelDelegates = new List<ModelDelegate>();
+        private List<BehaviorDelegate> BehaviorDelegates = new List<BehaviorDelegate>();
+        private List<TaskStatus> TSModels = new List<TaskStatus>();
+        private List<TaskStatus> TSBehaviors = new List<TaskStatus>();
+        private List<TaskMode> ModelModes = new List<TaskMode>();
+        private List<TaskMode> BehaviorModes = new List<TaskMode>();
+        public enum TaskMode {Add = 0, Replace = 1, ReplaceOrAdd = 2, RemoveAndAdd = 3, Remove = 4 }
         public enum TypeLog { None = 0, Models = 1, Behaviors = 2, All = 3 }
         public enum LogLvl { Tracking = 0, Info = 1, Warning = 2, Error = 3 }
+        public enum TaskStatus { Pending, Completed, Warning, Error}
         private bool IsInit = false;
-        List<NHLTask> BTasks;
-        List<NHLTask> MTasks;
-        private struct NHLTask
+
+        public void AddModel<AddType>()
+            where AddType : GameModel, new()
         {
-            public Type add, remove;
-            public TaskMode mode;
-            public NHLTask(Type a, Type b, TaskMode m)
-            {
-                add = a;
-                remove = b;
-                mode = m;
-            }
+            ModelDelegates.Add(NHLModel<AddType, GameModel>);
+            ModelModes.Add(TaskMode.Add);
+        }
+        public void ReplaceModel<AddType,RemoveType>(TaskMode m = TaskMode.Replace)
+            where AddType : GameModel, new()
+            where RemoveType : GameModel
+        {
+            ModelDelegates.Add(NHLModel<AddType,RemoveType>);
+            ModelModes.Add(m);
+        }
+        public void AddBehavior<AddType>()
+            where AddType : CampaignBehaviorBase, new()
+        {
+            BehaviorDelegates.Add(NHLBehavior<AddType, CampaignBehaviorBase>);
+            BehaviorModes.Add(TaskMode.Add);
+        }
+        public void ReplaceBehavior<AddType, RemoveType>(TaskMode m = TaskMode.Replace)
+            where AddType : CampaignBehaviorBase, new()
+            where RemoveType : CampaignBehaviorBase
+        {
+            BehaviorDelegates.Add(NHLBehavior<AddType,RemoveType>);
+            BehaviorModes.Add(m);
         }
 
 
-
-        /// <summary>
-        /// Use it to add a campaignbehavior to the game. If the model might already be present use ReplaceBehavior instead.
-        /// </summary>
-        /// <typeparam name="AddType">The behavior you want to add.</typeparam>
-        /// <param name="mode">Unused, only for compatibility with NoHarmony</param>
-        protected void AddBehavior<AddType>(TaskMode mode = TaskMode.ReplaceOrAdd)
-            where AddType : CampaignBehaviorBase
-        {
-            BTasks.Add(new NHLTask(typeof(AddType), null, TaskMode.ReplaceOrAdd));
-        }
-
-        /// <summary>
-        /// Use it to add a model to the game. If the model might already be present use ReplaceModel instead.
-        /// </summary>
-        /// <typeparam name="AddType">The model you want to add.</typeparam>
-        /// <param name="mode">Unused, only for compatibility with NoHarmony</param>
-        protected void AddModel<AddType>(TaskMode mode = TaskMode.ReplaceOrAdd)
-            where AddType : GameModel
-        {
-            MTasks.Add(new NHLTask(typeof(AddType), null, TaskMode.ReplaceOrAdd));
-        }
-
-        /// <summary>
-        /// Use it to replace a behavior.
-        /// </summary>
-        /// <typeparam name="AddType"></typeparam>
-        /// <typeparam name="ReplaceType"></typeparam>
-        /// <param name="mode"></param>
-        protected void ReplaceBehavior<AddType, ReplaceType>(TaskMode mode = TaskMode.ReplaceOrAdd)
-            where ReplaceType : CampaignBehaviorBase
-            where AddType : ReplaceType
-        {
-            BTasks.Add(new NHLTask(typeof(AddType), typeof(ReplaceType), mode));
-        }
-
-        /// <summary>
-        /// Use it to replace a model.
-        /// </summary>
-        /// <typeparam name="AddType"></typeparam>
-        /// <typeparam name="ReplaceType"></typeparam>
-        /// <param name="mode"></param>
-        protected void ReplaceModel<AddType, ReplaceType>(TaskMode mode = TaskMode.ReplaceOrAdd)
-            where ReplaceType : GameModel
-            where AddType : ReplaceType
-        {
-            MTasks.Add(new NHLTask(typeof(AddType), typeof(ReplaceType), mode));
-        }
-
-        private void NHLModel(CampaignGameStarter gameI)
+        private TaskStatus NHLModel<AddType,RemoveType>(IGameStarter gameI, TaskMode mode)
+            where RemoveType : GameModel
+            where AddType : GameModel, new()
         {
             IList<GameModel> models = gameI.Models as IList<GameModel>;
-            foreach (NHLTask tmp in MTasks)
+            TaskStatus st = TaskStatus.Pending;
+            int rm = 0;
+
+            for (int index = 0; index < models.Count; ++index)
             {
-                if (tmp.remove != null)
+                if (mode !=TaskMode.Remove && models[index] is AddType)
                 {
-                    for (int index = 0; index < models.Count; ++index)
+                    Log(LogLvl.Warning, typeof(AddType) + " already installed, skipping.");
+                    if (mode == TaskMode.RemoveAndAdd)
+                        st = TaskStatus.Warning;
+                    else
+                        return TaskStatus.Warning;
+                }
+                if (models[index] is RemoveType)
+                {
+                    if (mode == TaskMode.Replace || mode == TaskMode.ReplaceOrAdd) 
                     {
-                        if (models[index].GetType().IsAssignableFrom(tmp.remove))
-                        {
-                            if (tmp.add != null)
-                                models[index] = (GameModel)Activator.CreateInstance(tmp.add);
-                            else
-                                models.RemoveAt(index);
-                            break;
-                        }
+                        models[index] = new AddType();
+                        Log(LogLvl.Info, typeof(RemoveType) + " found and replaced with " + typeof(AddType) + ".");
+                        return TaskStatus.Completed; 
+                    }else if(mode == TaskMode.Remove || mode == TaskMode.RemoveAndAdd)
+                    {
+                        models.RemoveAt(index);
+                        rm++;
                     }
                 }
-                else
-                {
-                    gameI.AddModel((GameModel)Activator.CreateInstance(tmp.add));
-                }
             }
-            if (Logging && (ObjectsToLog == TypeLog.All || ObjectsToLog == TypeLog.Models))
+            if (mode != TaskMode.Replace && mode != TaskMode.Remove && st == TaskStatus.Pending)
             {
-                Log(LogLvl.Tracking, "List of models :");
-                for (int index = 0; index < models.Count; ++index)
-                {
-                    Log(LogLvl.Tracking, models[index].ToString());
-                }
+                gameI.AddModel(new AddType());
+                Log(LogLvl.Info, typeof(AddType) + " added.");
             }
+            if(mode == TaskMode.RemoveAndAdd) 
+            {
+                if (rm == 0)
+                {
+                    Log(LogLvl.Warning, typeof(RemoveType) + " not found.");
+                    st = TaskStatus.Warning;
+                }
+                if (st == TaskStatus.Pending)
+                    st = TaskStatus.Completed;
+                return st;
+            }
+            if(mode == TaskMode.Remove && rm == 0)
+            {
+                Log(LogLvl.Warning, typeof(RemoveType) + " not found.");
+                return TaskStatus.Warning;
+            }
+            return TaskStatus.Completed;
         }
 
-        private void NHLBehavior(Campaign campaign)
+        private TaskStatus NHLBehavior<AddType, RemoveType>(Campaign campaign, TaskMode mode)
+            where RemoveType : CampaignBehaviorBase
+            where AddType : CampaignBehaviorBase, new()
         {
             CampaignBehaviorManager cbm = (CampaignBehaviorManager)campaign.CampaignBehaviorManager;
-            foreach (NHLTask tmp in BTasks)
+            if (mode != TaskMode.Add)
             {
-                if (tmp.remove != null)
-                {
-                    var cgb = typeof(Campaign).GetMethod("GetCampaignBehavior").MakeGenericMethod(tmp.remove).Invoke(campaign, null);
-                    CampaignEvents.RemoveListeners(cgb);
-                    typeof(CampaignBehaviorManager).GetMethod("RemoveBehavior").MakeGenericMethod(tmp.remove).Invoke(cbm, null);
-                }
-                if (tmp.add != null)
-                    cbm.AddBehavior((CampaignBehaviorBase)Activator.CreateInstance(tmp.add));
+                var cgb = campaign.GetCampaignBehavior<RemoveType>();
+                CampaignEvents.RemoveListeners(cgb);
+                cbm.RemoveBehavior<RemoveType>();
             }
-            if (Logging && (ObjectsToLog == TypeLog.All || ObjectsToLog == TypeLog.Behaviors))
-            {
-                Log(LogLvl.Tracking, "List of models :");
-                var cbb = campaign.GetCampaignBehaviors<CampaignBehaviorBase>();
-                foreach (CampaignBehaviorBase tmp in cbb)
-                {
-                    Log(LogLvl.Info, tmp.ToString());
-                }
-            }
+            if (mode != TaskMode.Remove)
+                cbm.AddBehavior(new AddType());
+            return TaskStatus.Completed;
         }
 
 
