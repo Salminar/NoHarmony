@@ -8,7 +8,7 @@ using TaleWorlds.CampaignSystem;
 using TaleWorlds.CampaignSystem.SandBox.CampaignBehaviors;
 
 
-[assembly: AssemblyVersionAttribute("0.9.9.0")]
+[assembly: AssemblyVersion("0.9.9.1")]
 namespace NoHarmony
 {
     public abstract class NoHarmonyLoader : MBSubModuleBase
@@ -17,11 +17,13 @@ namespace NoHarmony
         public TypeLog ObjectsToLog = TypeLog.None;
         public LogLvl MinLogLvl = LogLvl.Info;
         public string LogFile = "NoHarmony.txt";
+        public string LogDateFormat = "dd/MM/yy HH:mm:ss.fff";
 
         /// <summary>
         /// Put NoHarmony Initialise code here
         /// </summary>
         public abstract void NoHarmonyInit();
+        
 
         /// <summary>
         /// Use add and replace NoHarmony methods here to load your modules;
@@ -32,6 +34,7 @@ namespace NoHarmony
         //NoHarmony will initialize here, don't forget to call base if you override.
         protected override void OnSubModuleLoad()
         {
+            base.OnSubModuleLoad();
             NoHarmonyInit();
             IsInit = true;
             NoHarmonyLoad();
@@ -41,6 +44,7 @@ namespace NoHarmony
         //Models will be loaded here, don't forget to call base if you override. 
         protected override void OnGameStart(Game game, IGameStarter gameStarterObject)
         {
+            base.OnGameStart(game, gameStarterObject);
             if (!(game.GameType is Campaign))
             {
                 Log(LogLvl.Error, "Game is not a campaign.");
@@ -61,6 +65,7 @@ namespace NoHarmony
         //Behaviors operations wille be done here, don't forget to call base if you override.
         public override void OnGameInitializationFinished(Game game)
         {
+            base.OnGameInitializationFinished(game);
             if (!(game.GameType is Campaign campaign))
             {
                 Log(LogLvl.Error, "Game is not a campaign.");
@@ -76,7 +81,6 @@ namespace NoHarmony
                 TaskStatus result = BehaviorDelegates[index].Invoke(campaign, BehaviorModes[index]);
                 TSBehaviors.Add(result);
             }
-
         }
 
         // NoHarmony core features past this point
@@ -184,6 +188,7 @@ namespace NoHarmony
                     {
                         models.RemoveAt(index); // C# rearrange the for loop on it's own. 
                         rm++;
+                        index--;
                     }
                 }
             }
@@ -228,7 +233,11 @@ namespace NoHarmony
         }
 
 
-        //Logging Core
+        /// <summary>
+        /// Add a message to NoHarmony log file
+        /// </summary>
+        /// <param name="mLvl">Message logging level</param>
+        /// <param name="message">Message core</param>
         public void Log(LogLvl mLvl, string message)
         {
             if (mLvl.CompareTo(MinLogLvl) < 0 || !Logging)
@@ -249,7 +258,7 @@ namespace NoHarmony
                     break;
             }
             using (StreamWriter sw = new StreamWriter(LogFile, true))
-                sw.WriteLine(DateTime.Now.ToString("dd/MM/yy HH:mm:ss.fff") + " > " + message);
+                sw.WriteLine(DateTime.Now.ToString(LogDateFormat) + " > " + message);
         }
     }
 
