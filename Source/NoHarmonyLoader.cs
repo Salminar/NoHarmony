@@ -3,12 +3,13 @@ using System.Reflection;
 using System.IO;
 using System.Collections.Generic;
 using TaleWorlds.Core;
+using TaleWorlds.Library;
 using TaleWorlds.MountAndBlade;
 using TaleWorlds.CampaignSystem;
 using TaleWorlds.CampaignSystem.SandBox.CampaignBehaviors;
 
 
-[assembly: AssemblyVersion("0.9.9.1")]
+[assembly: AssemblyVersion("1.0.0.0")]
 namespace NoHarmony
 {
     public abstract class NoHarmonyLoader : MBSubModuleBase
@@ -18,6 +19,7 @@ namespace NoHarmony
         public LogLvl MinLogLvl = LogLvl.Info;
         public string LogFile = "NoHarmony.txt";
         public string LogDateFormat = "dd/MM/yy HH:mm:ss.fff";
+        public bool UseConfFile = false;
 
         /// <summary>
         /// Put NoHarmony Initialise code here
@@ -31,17 +33,26 @@ namespace NoHarmony
         public abstract void NoHarmonyLoad();
         //End config
 
-        //NoHarmony will initialize here, don't forget to call base if you override.
+        /// <summary>
+        /// NoHarmony will initialize here, don't forget to call base.OnSubModuleLoad() if you override.
+        /// </summary>
         protected override void OnSubModuleLoad()
         {
             base.OnSubModuleLoad();
             NoHarmonyInit();
+            if(UseConfFile)
+                LoadConf();
+            Log(LogLvl.Info, "NoHarmony initilized successfully.");
             IsInit = true;
             NoHarmonyLoad();
             Log(LogLvl.Info, "Pending tasks : " + ModelDelegates.Count + " models, " + BehaviorDelegates.Count + " behaviors.");
         }
 
-        //Models will be loaded here, don't forget to call base if you override. 
+        /// <summary>
+        /// Models will be loaded here, don't forget to call base.OnGameStart(game, gameStarterObject) if you override.
+        /// </summary>
+        /// <param name="game"></param>
+        /// <param name="gameStarterObject"></param>
         protected override void OnGameStart(Game game, IGameStarter gameStarterObject)
         {
             base.OnGameStart(game, gameStarterObject);
@@ -52,7 +63,7 @@ namespace NoHarmony
             }
             if (ModelDelegates.Count != ModelModes.Count)
             {
-                Log(LogLvl.Error, "Task lost during Init, skiping all models modification.");
+                Log(LogLvl.Error, "Task lost during preprocessing, skiping all models modification.");
                 return;
             }
             for (int index = 0; index < ModelDelegates.Count; ++index)
@@ -62,7 +73,10 @@ namespace NoHarmony
             }
         }
 
-        //Behaviors operations wille be done here, don't forget to call base if you override.
+        /// <summary>
+        /// Behaviors operations wille be done here, don't forget to call.OnGameInitializationFinished(game) base if you override.
+        /// </summary>
+        /// <param name="game"></param>
         public override void OnGameInitializationFinished(Game game)
         {
             base.OnGameInitializationFinished(game);
@@ -73,7 +87,7 @@ namespace NoHarmony
             }
             if(BehaviorDelegates.Count != BehaviorModes.Count)
             {
-                Log(LogLvl.Error, "Task lost during Init, skiping all behaviors modification.");
+                Log(LogLvl.Error, "Task lost during preprocessing, skiping all behaviors modification.");
                 return;
             }
             for (int index = 0; index < BehaviorDelegates.Count; ++index)
@@ -260,10 +274,14 @@ namespace NoHarmony
             using (StreamWriter sw = new StreamWriter(LogFile, true))
                 sw.WriteLine(DateTime.Now.ToString(LogDateFormat) + " > " + message);
         }
+        public void LoadConf()
+        {
+            
+        }
     }
 
-    public sealed class DummyModel : GameModel { }
-    public sealed class DummyBehavior : CampaignBehaviorBase
+    public sealed class DummyModel : GameModel { }// used to replace null, should never end in the game.
+    public sealed class DummyBehavior : CampaignBehaviorBase// used to replace null, should never end in the game.
     {
         public override void RegisterEvents()
         {
